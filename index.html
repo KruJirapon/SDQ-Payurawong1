@@ -1250,6 +1250,564 @@
                 font-size: 1.15rem;
             }
         }
+    
+
+        /* ======================================================================
+           12. RESPONSIVE REFINEMENT - MOBILE FIRST DASHBOARD & APP SHELL
+           เป้าหมาย: ไม่มีส่วนสำคัญถูกตัด, กราฟปรับตามจอ, ตารางเลื่อนได้ครบทุกคอลัมน์
+           ====================================================================== */
+        html {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+            -webkit-text-size-adjust: 100%;
+        }
+
+        body {
+            width: 100%;
+            min-width: 320px;
+            min-height: 100%;
+            height: auto;
+            overflow-x: hidden;
+        }
+
+        .app-shell,
+        .main-wrapper,
+        .content-container,
+        .route-view,
+        #view-dashboard,
+        .panel,
+        .charts-grid > .panel {
+            min-width: 0;
+        }
+
+        .app-shell {
+            width: 100%;
+            min-height: 100vh;
+            min-height: 100dvh;
+        }
+
+        .sidebar {
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .main-wrapper {
+            width: calc(100% - var(--sidebar-width));
+            max-width: 100%;
+            flex: 1 1 auto;
+        }
+
+        .content-container {
+            width: 100%;
+            max-width: 1440px;
+        }
+
+        .route-view {
+            width: 100%;
+        }
+
+        .panel,
+        .kpi-card,
+        .group-stat-box,
+        .filter-bar,
+        .page-header > div {
+            overflow-wrap: anywhere;
+        }
+
+        .kpi-grid {
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+        }
+
+        .kpi-card {
+            min-width: 0;
+        }
+
+        .charts-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            align-items: stretch;
+        }
+
+        .charts-grid > .panel {
+            min-width: 0;
+            margin-bottom: 0;
+        }
+
+        .chart-container {
+            width: 100%;
+            min-width: 0;
+            height: clamp(240px, 26vw, 310px);
+        }
+
+        .chart-container canvas {
+            display: block;
+            max-width: 100%;
+        }
+
+        .table-responsive {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            overscroll-behavior-x: contain;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-strong) var(--bg-subtle);
+        }
+
+        .table-responsive:focus-visible {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
+        }
+
+        .dashboard-classroom-table {
+            min-width: 920px;
+            table-layout: auto;
+        }
+
+        .dashboard-table-hint {
+            display: none;
+            margin-top: 10px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            line-height: 1.45;
+        }
+
+        .mobile-top-banner {
+            display: none;
+        }
+
+        @media (max-width: 1100px) {
+            .main-wrapper {
+                width: calc(100% - var(--sidebar-width));
+            }
+            .kpi-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            .chart-container {
+                height: 290px;
+            }
+            .dashboard-table-hint {
+                display: block;
+            }
+        }
+
+        @media (max-width: 820px) {
+            .main-wrapper {
+                width: 100%;
+                margin-left: 0;
+            }
+
+            .mobile-top-banner {
+                display: flex;
+                align-items: center;
+                gap: 11px;
+                width: 100%;
+                min-height: 82px;
+                padding: 12px 15px;
+                color: #FFFFFF;
+                background: linear-gradient(115deg, #103C2A 0%, #1B5A3D 68%, #286A4C 100%);
+                border-bottom: 3px solid var(--color-accent);
+                box-shadow: 0 3px 12px rgba(20, 69, 47, 0.13);
+            }
+
+            .mobile-banner-emblem {
+                width: 48px;
+                height: 48px;
+                flex: 0 0 48px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                border-radius: 50%;
+                background: #FFFFFF;
+                border: 2px solid #D7B66E;
+                color: var(--color-primary);
+            }
+
+            .mobile-banner-emblem img {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+                padding: 2px;
+            }
+
+            .mobile-banner-copy {
+                display: flex;
+                flex: 1 1 auto;
+                flex-direction: column;
+                min-width: 0;
+                line-height: 1.25;
+            }
+
+            .mobile-banner-school {
+                color: #E6F1EA;
+                font-size: 0.74rem;
+                font-weight: 500;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .mobile-banner-title {
+                color: #FFFFFF;
+                font-size: 1rem;
+                font-weight: 700;
+                margin-top: 2px;
+                overflow-wrap: anywhere;
+            }
+
+            .mobile-banner-caption {
+                color: #C7DCCF;
+                font-size: 0.68rem;
+                margin-top: 3px;
+            }
+
+            .mobile-banner-year {
+                flex: 0 0 auto;
+                align-self: flex-start;
+                padding: 5px 8px;
+                color: #F9E9C8;
+                background: rgba(255,255,255,0.10);
+                border: 1px solid rgba(249,233,200,0.45);
+                border-radius: 4px;
+                font-size: 0.68rem;
+                font-weight: 700;
+                white-space: nowrap;
+            }
+
+            .top-header {
+                height: auto;
+                min-height: 0;
+                padding: 11px 14px;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .header-left {
+                width: 100%;
+                min-width: 0;
+                gap: 10px;
+            }
+
+            .header-title-group {
+                min-width: 0;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            .header-system-title {
+                font-size: 0.9rem;
+                line-height: 1.35;
+            }
+
+            .header-year-pill {
+                font-size: 0.72rem;
+                padding: 2px 7px;
+            }
+
+            .header-right {
+                width: 100%;
+                min-width: 0;
+                gap: 7px;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+            }
+
+            .user-badge {
+                flex: 1 1 130px;
+                min-width: 0;
+                max-width: 100%;
+                padding: 6px 8px;
+                font-size: 0.76rem;
+                overflow-wrap: anywhere;
+            }
+
+            .header-right .btn {
+                min-height: 36px;
+                padding: 6px 9px;
+                font-size: 0.78rem;
+                white-space: nowrap;
+            }
+
+            .content-container {
+                padding: 15px 12px 30px;
+            }
+
+            .page-header {
+                margin-bottom: 15px;
+                gap: 8px;
+            }
+
+            .page-title {
+                font-size: 1.24rem;
+                line-height: 1.4;
+            }
+
+            .page-subtitle {
+                font-size: 0.84rem;
+                line-height: 1.5;
+            }
+
+            .filter-bar {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 10px;
+                padding: 13px;
+                margin-bottom: 14px;
+            }
+
+            .form-control {
+                width: 100%;
+                min-width: 0;
+                min-height: 44px;
+                height: auto;
+                padding: 9px 11px;
+            }
+
+            .kpi-grid,
+            .dashboard-kpi-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                gap: 10px;
+                margin-bottom: 14px;
+            }
+
+            .kpi-card {
+                min-height: 112px;
+                padding: 13px 11px;
+            }
+
+            .kpi-label {
+                font-size: 0.78rem;
+                line-height: 1.4;
+                margin-bottom: 7px;
+            }
+
+            .kpi-value {
+                font-size: 1.55rem;
+                line-height: 1.15;
+            }
+
+            .kpi-sub {
+                font-size: 0.72rem;
+                line-height: 1.4;
+            }
+
+            .panel {
+                padding: 15px 12px;
+                margin-bottom: 14px;
+            }
+
+            .panel-header {
+                align-items: flex-start;
+                gap: 8px;
+                padding-bottom: 11px;
+                margin-bottom: 13px;
+            }
+
+            .panel-title {
+                font-size: 0.98rem;
+                line-height: 1.45;
+            }
+
+            .summary-3col {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 9px;
+            }
+
+            .group-stat-box {
+                min-width: 0;
+                gap: 10px;
+                padding: 13px 12px;
+            }
+
+            .group-stat-title {
+                font-size: 0.9rem;
+                line-height: 1.4;
+            }
+
+            .group-stat-desc {
+                font-size: 0.74rem;
+                line-height: 1.45;
+            }
+
+            .group-stat-count {
+                font-size: 1.28rem;
+            }
+
+            .group-stat-pct {
+                font-size: 0.82rem;
+            }
+
+            .charts-grid {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 12px;
+                margin-bottom: 14px;
+            }
+
+            .charts-grid > .panel {
+                padding: 14px 10px;
+                margin-bottom: 0;
+            }
+
+            .charts-grid .panel-header {
+                min-height: 0;
+            }
+
+            .chart-container {
+                width: 100%;
+                height: 270px;
+                min-height: 250px;
+            }
+
+            /* Long classroom table remains fully accessible through a visible horizontal scroller. */
+            .dashboard-table-scroll {
+                display: block;
+                width: 100%;
+                max-width: 100%;
+                padding-bottom: 5px;
+            }
+
+            .dashboard-classroom-table {
+                min-width: 920px;
+                font-size: 0.84rem;
+            }
+
+            .dashboard-classroom-table th,
+            .dashboard-classroom-table td {
+                padding: 9px 10px;
+            }
+
+            .dashboard-table-hint {
+                display: block;
+            }
+
+            .table-responsive:not(.dashboard-table-scroll) table {
+                min-width: 560px;
+            }
+
+            .question-card,
+            .batch-matrix-card {
+                padding: 16px 12px;
+            }
+
+            .question-text-box {
+                padding: 15px 13px;
+                font-size: 1.08rem;
+            }
+
+            .choice-btn {
+                min-height: 54px;
+                padding: 13px 14px;
+                font-size: 1rem;
+            }
+
+            .grade-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 9px;
+            }
+
+            .grade-btn-card {
+                padding: 13px 11px;
+            }
+
+            .modal-backdrop {
+                padding: 10px;
+                align-items: flex-end;
+            }
+
+            .modal-dialog {
+                width: 100%;
+                max-width: none;
+                max-height: 92dvh;
+                border-radius: 9px 9px 0 0;
+            }
+
+            .modal-header,
+            .modal-body,
+            .modal-footer {
+                padding-left: 15px;
+                padding-right: 15px;
+            }
+
+            .modal-footer {
+                flex-wrap: wrap;
+            }
+
+            .toast-container {
+                left: 12px;
+                right: 12px;
+                bottom: max(12px, env(safe-area-inset-bottom));
+                max-width: none;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .mobile-top-banner {
+                gap: 8px;
+                min-height: 76px;
+                padding: 10px 11px;
+            }
+
+            .mobile-banner-emblem {
+                width: 42px;
+                height: 42px;
+                flex-basis: 42px;
+            }
+
+            .mobile-banner-title {
+                font-size: 0.9rem;
+            }
+
+            .mobile-banner-caption {
+                font-size: 0.62rem;
+            }
+
+            .mobile-banner-year {
+                padding: 4px 6px;
+                font-size: 0.62rem;
+            }
+
+            .header-right .btn {
+                font-size: 0.72rem;
+                padding: 6px 7px;
+            }
+
+            .kpi-grid,
+            .dashboard-kpi-grid {
+                grid-template-columns: minmax(0, 1fr) !important;
+            }
+
+            .kpi-card {
+                min-height: 0;
+            }
+
+            .chart-container {
+                height: 250px;
+                min-height: 230px;
+            }
+        }
+
+        @media (min-width: 821px) {
+            .mobile-top-banner {
+                display: none !important;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -1356,6 +1914,19 @@
 
         <!-- Right Main Content Area -->
         <div class="main-wrapper">
+            <div class="mobile-top-banner no-print" aria-label="แบนเนอร์ระบบประเมิน SDQ">
+                <div class="mobile-banner-emblem" id="mobileBannerLogoContainer" aria-hidden="true">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                    </svg>
+                </div>
+                <div class="mobile-banner-copy">
+                    <span class="mobile-banner-school" id="mobileBannerSchoolName">โรงเรียนวัดประยุรวงศ์</span>
+                    <strong class="mobile-banner-title">ระบบประเมิน SDQ ผู้เรียน</strong>
+                    <span class="mobile-banner-caption">ระบบสารสนเทศเพื่อการดูแลช่วยเหลือนักเรียน</span>
+                </div>
+                <span class="mobile-banner-year" id="mobileBannerYearBadge">ปีการศึกษา 2569</span>
+            </div>
             <header class="top-header no-print">
                 <div class="header-left">
                     <button type="button" id="btnMobileMenu" class="mobile-menu-btn" aria-label="เปิดเมนูนำทาง">
@@ -2042,12 +2613,18 @@
         document.getElementById("welcomeSchoolYear").textContent = `ปีการศึกษา ${schoolYear}`;
         document.getElementById("sidebarSchoolName").textContent = schoolName;
         document.getElementById("headerYearBadge").textContent = `ปีการศึกษา ${schoolYear}`;
+        const mobileSchoolName = document.getElementById("mobileBannerSchoolName");
+        const mobileYearBadge = document.getElementById("mobileBannerYearBadge");
+        if (mobileSchoolName) mobileSchoolName.textContent = schoolName;
+        if (mobileYearBadge) mobileYearBadge.textContent = `ปีการศึกษา ${schoolYear}`;
         document.title = `ระบบประเมิน SDQ ผู้เรียน ปีการศึกษา ${schoolYear} - ${schoolName}`;
 
         if (logoUrl) {
             const imgHtml = `<img src="${escapeHTML(logoUrl)}" alt="โลโก้${escapeHTML(schoolName)}" onerror="this.style.display='none'">`;
             document.getElementById("welcomeLogoContainer").innerHTML = imgHtml;
             document.getElementById("sidebarLogoContainer").innerHTML = imgHtml;
+            const mobileLogo = document.getElementById("mobileBannerLogoContainer");
+            if (mobileLogo) mobileLogo.innerHTML = imgHtml;
         }
     }
 
@@ -2286,13 +2863,8 @@
                 </div>
             </div>
 
-            <!-- 5 KPI Summary Cards -->
-            <div class="kpi-grid">
-                <div class="kpi-card">
-                    <div class="kpi-label">นักเรียนทั้งหมด (ใช้งาน)</div>
-                    <div class="kpi-value">${stats.totalStudents}</div>
             <!-- 4 KPI Summary Cards -->
-            <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
+            <div class="kpi-grid dashboard-kpi-grid">
                 <div class="kpi-card">
                     <div class="kpi-label">นักเรียนทั้งหมด (ใช้งาน)</div>
                     <div class="kpi-value">${stats.totalStudents}</div>
@@ -2399,8 +2971,8 @@
                 <div class="panel-header">
                     <h2 class="panel-title">ตารางสรุปผลการประเมินแยกตามระดับชั้นและห้องเรียน</h2>
                 </div>
-                <div class="table-responsive">
-                    <table class="data-table">
+                <div class="table-responsive dashboard-table-scroll" tabindex="0" role="region" aria-label="ตารางสรุปผลการประเมิน เลื่อนด้านข้างเพื่อดูข้อมูลทุกคอลัมน์">
+                    <table class="data-table dashboard-classroom-table">
                         <thead>
                             <tr>
                                 <th>ระดับชั้น</th>
@@ -2448,6 +3020,7 @@
                         </tbody>
                     </table>
                 </div>
+                <p class="dashboard-table-hint">บนหน้าจอขนาดเล็ก สามารถเลื่อนตารางไปทางซ้ายหรือขวาเพื่อดูข้อมูลครบทุกคอลัมน์</p>
             </div>
         `;
 
@@ -2539,12 +3112,17 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: {
+                    indexAxis: window.matchMedia("(max-width: 600px)").matches ? "y" : "x",
+                    layout: { padding: { left: 4, right: 8, top: 4, bottom: 4 } },
+                    scales: window.matchMedia("(max-width: 600px)").matches ? {
+                        x: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, font: { family: fontFamily, size: 10 } } },
+                        y: { stacked: true, ticks: { autoSkip: false, font: { family: fontFamily, size: 11 } } }
+                    } : {
                         x: { stacked: true, ticks: { font: { family: fontFamily } } },
                         y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, font: { family: fontFamily } } }
                     },
                     plugins: {
-                        legend: { position: "bottom", labels: { font: { family: fontFamily, size: 13 } } }
+                        legend: { position: "bottom", labels: { boxWidth: 12, padding: 12, font: { family: fontFamily, size: window.matchMedia("(max-width: 600px)").matches ? 11 : 13 } } }
                     }
                 }
             });
@@ -2586,12 +3164,17 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: {
+                    indexAxis: window.matchMedia("(max-width: 600px)").matches ? "y" : "x",
+                    layout: { padding: { left: 4, right: 8, top: 4, bottom: 4 } },
+                    scales: window.matchMedia("(max-width: 600px)").matches ? {
+                        x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: fontFamily, size: 10 } } },
+                        y: { ticks: { autoSkip: false, font: { family: fontFamily, size: 10 } } }
+                    } : {
                         x: { ticks: { font: { family: fontFamily, size: 11 } } },
                         y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: fontFamily } } }
                     },
                     plugins: {
-                        legend: { position: "bottom", labels: { font: { family: fontFamily, size: 12 } } }
+                        legend: { position: "bottom", labels: { boxWidth: 12, padding: 12, font: { family: fontFamily, size: window.matchMedia("(max-width: 600px)").matches ? 10 : 12 } } }
                     }
                 }
             });
