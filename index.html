@@ -2032,6 +2032,9 @@
         "ประถมศึกษาปีที่ 6"
     ];
 
+    // ปีการศึกษาที่ระบบรองรับ: พ.ศ. 2568–2580
+    const ACADEMIC_YEARS = Array.from({ length: 13 }, (_, index) => String(2568 + index));
+
     // ข้อคำถาม SDQ ฉบับครูประเมินนักเรียนภาษาไทย ต้นฉบับ 25 ข้อ
     const SDQ_QUESTIONS = [
         { no: 1,  text: "ห่วงใยความรู้สึกของผู้อื่น", domain: "prosocial", reversed: false },
@@ -2133,6 +2136,7 @@
             selectedAssessmentId: null
         },
         studentMgmtFilter: {
+            schoolYear: CONFIG.SCHOOL_YEAR,
             grade: "ALL",
             room: "ALL",
             showArchived: false
@@ -2148,6 +2152,7 @@
         // Active Assessment Session State
         assessSession: {
             step: "select-grade", // select-grade | select-room | student-list | questionnaire | impact | preview | completed | batch-questionnaire | batch-impact | batch-preview | batch-completed
+            schoolYear: CONFIG.SCHOOL_YEAR,
             selectedGrade: null,
             selectedRoom: null,
             studentId: null,
@@ -2179,7 +2184,7 @@
     const SHEET_SCHEMAS = {
         Students: [
             "studentId", "studentCode", "fullName", "grade", "room",
-            "studentNo", "status", "createdAt", "updatedAt"
+            "studentNo", "status", "createdAt", "updatedAt", "schoolYear"
         ],
         Assessments: [
             "assessmentId", "studentId", "schoolYear", "assessedAt", "assessorName",
@@ -2416,6 +2421,8 @@
         try {
             applyBranding();
             await syncAllDataFromSheets();
+            // The assessment page starts from the configured active academic year.
+            state.assessSession.schoolYear = getDefaultAcademicYear();
 
             document.getElementById("headerUserEmail").textContent = state.userEmail;
             document.getElementById("welcomeView").classList.add("hidden");
@@ -2497,29 +2504,58 @@
                 loadedSettings = localDb.settings;
             }
 
-            // Apply Settings
-            state.settings = loadedSettings;
+            // Apply Settings and normalize academic-year settings
+            const configuredSchoolYear = String(loadedSettings.schoolYear || CONFIG.SCHOOL_YEAR);
+            const activeSchoolYear = isSupportedAcademicYear(configuredSchoolYear)
+                ? configuredSchoolYear
+                : String(CONFIG.SCHOOL_YEAR);
+            const configuredDashboardYear = String(loadedSettings.dashboardHomeYear || activeSchoolYear);
+            const dashboardHomeYear = isSupportedAcademicYear(configuredDashboardYear)
+                ? configuredDashboardYear
+                : activeSchoolYear;
+            state.settings = {
+                ...loadedSettings,
+                schoolYear: activeSchoolYear,
+                dashboardHomeYear
+            };
             if (loadedSettings.sdqCriteriaJson) {
                 try {
                     const parsed = JSON.parse(loadedSettings.sdqCriteriaJson);
                     SDQ_CRITERIA = { ...SDQ_CRITERIA, ...parsed };
                 } catch (e) { /* keep default criteria */ }
             }
-            if (loadedSettings.schoolYear) {
-                state.dashboardFilter.schoolYear = loadedSettings.schoolYear;
-                state.printConfig.schoolYear = loadedSettings.schoolYear;
+            // Apply the configured Dashboard year only during the initial entry screen.
+            // Manual Dashboard year selection remains intact during background/data refreshes.
+            if (document.getElementById("appShell")?.classList.contains("hidden")) {
+                state.dashboardFilter.schoolYear = dashboardHomeYear;
+            }
+            if (document.getElementById("appShell")?.classList.contains("hidden") ||
+                !isSupportedAcademicYear(state.printConfig.schoolYear)) {
+                state.printConfig.schoolYear = activeSchoolYear;
+            }
+            if (document.getElementById("appShell")?.classList.contains("hidden") ||
+                !isSupportedAcademicYear(state.studentMgmtFilter.schoolYear)) {
+                state.studentMgmtFilter.schoolYear = activeSchoolYear;
+            }
+            if (!state.assessSession.schoolYear || !isSupportedAcademicYear(state.assessSession.schoolYear)) {
+                state.assessSession.schoolYear = activeSchoolYear;
             }
             applyBranding();
 
-            // Process Students
+            // Process Students. Legacy records are assigned to the configured active year.
             state.students = loadedStudents.map((s, idx) => ({
                 ...s,
+                schoolYear: String(s.schoolYear || activeSchoolYear),
                 _rowNumber: s._rowNumber || (idx + 2)
             }));
 
             // Process Assessments & Recalculate from raw 25 answers
             state.assessments = loadedAssessments.map((a, idx) => {
-                const obj = { ...a, _rowNumber: a._rowNumber || (idx + 2) };
+                const obj = {
+                    ...a,
+                    schoolYear: String(a.schoolYear || activeSchoolYear),
+                    _rowNumber: a._rowNumber || (idx + 2)
+                };
                 const rawAnswers = [];
                 for (let q = 1; q <= 25; q++) {
                     const key = `answer${String(q).padStart(2, "0")}`;
@@ -2588,7 +2624,7 @@
         });
 
         if (sheetName === "Students") {
-            const idx = state.students.findIndex(s => s.studentId === obj.studentId || s._rowNumber === rowNumber);
+            const idx = state.students.findIndex(s => Number(s._rowNumber) === Number(rowNumber));
             if (idx >= 0) state.students[idx] = obj;
         } else if (sheetName === "Assessments") {
             const idx = state.assessments.findIndex(a => a.assessmentId === obj.assessmentId || a._rowNumber === rowNumber);
@@ -2632,12 +2668,39 @@
        8. DATA ANALYTICS & AGGREGATION ENGINE (แยกประชากรจากสูตร SDQ เด็ดขาด)
        ---------------------------------------------------------------------------- */
     function getAvailableSchoolYears() {
-        const years = new Set([CONFIG.SCHOOL_YEAR]);
-        if (state.settings.schoolYear) years.add(state.settings.schoolYear);
-        state.assessments.forEach(a => {
-            if (a.schoolYear) years.add(String(a.schoolYear));
-        });
-        return Array.from(years).sort().reverse();
+        // ใช้ช่วงปีที่กำหนดแน่นอน เพื่อให้เลือกดู/ทำรายงานย้อนหลังและล่วงหน้าได้
+        return [...ACADEMIC_YEARS].reverse();
+    }
+
+    function isSupportedAcademicYear(year) {
+        return ACADEMIC_YEARS.includes(String(year));
+    }
+
+    function getDefaultAcademicYear() {
+        const year = String(state.settings.schoolYear || CONFIG.SCHOOL_YEAR);
+        return isSupportedAcademicYear(year) ? year : String(CONFIG.SCHOOL_YEAR);
+    }
+
+    function getDefaultDashboardYear() {
+        const year = String(state.settings.dashboardHomeYear || state.settings.schoolYear || CONFIG.SCHOOL_YEAR);
+        return isSupportedAcademicYear(year) ? year : getDefaultAcademicYear();
+    }
+
+    function getStudentAcademicYear(student) {
+        // ข้อมูลเก่าที่ไม่มี schoolYear จะถูกตีความเป็นปีปัจจุบันในช่วงย้ายระบบ
+        return String(student?.schoolYear || getDefaultAcademicYear());
+    }
+
+    function getStudentsForYear(schoolYear, includeArchived = false) {
+        return state.students.filter(student =>
+            getStudentAcademicYear(student) === String(schoolYear) &&
+            (includeArchived || (student.status || "active") === "active")
+        );
+    }
+
+    function getStudentForYear(studentId, schoolYear) {
+        const matches = state.students.filter(student => String(student.studentId) === String(studentId));
+        return matches.find(student => getStudentAcademicYear(student) === String(schoolYear)) || matches[0] || null;
     }
 
     /**
@@ -2676,8 +2739,8 @@
      * คำนวณสถิติ Dashboard ตามตัวกรอง (ปีการศึกษา, ระดับชั้น, ห้องเรียน)
      */
     function computeDashboardStats(schoolYear, gradeFilter = "ALL", roomFilter = "ALL") {
-        // กรองเฉพาะนักเรียนที่ยังใช้งาน (status === 'active')
-        const activeStudents = state.students.filter(s => (s.status || "active") === "active");
+        // นับเฉพาะรายชื่อนักเรียนของปีการศึกษาที่เลือก และยังใช้งานอยู่
+        const activeStudents = getStudentsForYear(schoolYear);
         const filteredStudents = activeStudents.filter(s => {
             if (gradeFilter !== "ALL" && s.grade !== gradeFilter) return false;
             if (roomFilter !== "ALL" && String(s.room) !== String(roomFilter)) return false;
@@ -2822,7 +2885,7 @@
         const years = getAvailableSchoolYears();
 
         // หาห้องเรียนที่มีในระดับชั้นที่เลือก
-        const activeStudents = state.students.filter(s => (s.status || "active") === "active");
+        const activeStudents = getStudentsForYear(schoolYear);
         const roomsInGrade = Array.from(new Set(
             activeStudents
                 .filter(s => grade === "ALL" || s.grade === grade)
@@ -3214,7 +3277,7 @@
         const { query, grade, room, selectedStudentId, selectedAssessmentId } = state.individualFilter;
         const schoolYear = state.dashboardFilter.schoolYear;
 
-        const activeStudents = state.students.filter(s => (s.status || "active") === "active");
+        const activeStudents = getStudentsForYear(schoolYear);
         const rooms = Array.from(new Set(
             activeStudents
                 .filter(s => grade === "ALL" || s.grade === grade)
@@ -3233,7 +3296,7 @@
             return true;
         });
 
-        const selectedStudent = state.students.find(s => s.studentId === selectedStudentId);
+        const selectedStudent = getStudentForYear(selectedStudentId, schoolYear);
         let studentHistory = [];
         let activeAssessment = null;
 
@@ -3578,9 +3641,9 @@
        12. VIEW 3: STEP-BY-STEP SDQ ASSESSMENT WORKFLOW
        ---------------------------------------------------------------------------- */
     function startBatchAssessmentForClass(grade, room) {
-        const schoolYear = state.settings.schoolYear || CONFIG.SCHOOL_YEAR;
-        const activeStudents = state.students
-            .filter(s => (s.status || "active") === "active" && s.grade === grade && String(s.room) === String(room))
+        const schoolYear = String(state.assessSession.schoolYear || getDefaultAcademicYear());
+        const activeStudents = getStudentsForYear(schoolYear)
+            .filter(s => s.grade === grade && String(s.room) === String(room))
             .sort((a, b) => Number(a.studentNo || 0) - Number(b.studentNo || 0));
 
         if (activeStudents.length === 0) {
@@ -3617,6 +3680,7 @@
         state.assessSession = {
             ...state.assessSession,
             step: "batch-questionnaire",
+            schoolYear,
             selectedGrade: grade,
             selectedRoom: room,
             assessedAt: getTodayISO(),
@@ -3629,10 +3693,14 @@
     }
 
     function startAssessmentForStudent(studentId, forceNewRepeat = false) {
-        const student = state.students.find(s => s.studentId === studentId);
+        const schoolYear = String(
+            state.currentRoute === "individual"
+                ? state.dashboardFilter.schoolYear
+                : (state.assessSession.schoolYear || getDefaultAcademicYear())
+        );
+        state.assessSession.schoolYear = schoolYear;
+        const student = getStudentForYear(studentId, schoolYear);
         if (!student) return;
-
-        const schoolYear = state.settings.schoolYear || CONFIG.SCHOOL_YEAR;
         const latestCompleted = getLatestAssessmentsByStudent(schoolYear).get(studentId);
         const existingDraft = getDraftAssessmentForStudent(studentId, schoolYear);
 
@@ -3658,6 +3726,7 @@
 
         state.assessSession = {
             step: "questionnaire",
+            schoolYear,
             selectedGrade: student.grade,
             selectedRoom: student.room,
             studentId: student.studentId,
@@ -3684,8 +3753,9 @@
     function renderAssessView() {
         const container = document.getElementById("view-assess");
         const sess = state.assessSession;
-        const schoolYear = state.settings.schoolYear || CONFIG.SCHOOL_YEAR;
-        const activeStudents = state.students.filter(s => (s.status || "active") === "active");
+        const schoolYear = String(sess.schoolYear || getDefaultAcademicYear());
+        sess.schoolYear = schoolYear;
+        const activeStudents = getStudentsForYear(schoolYear);
 
         // STEP 1: เลือกระดับชั้น
         if (sess.step === "select-grade") {
@@ -3694,6 +3764,14 @@
                     <div>
                         <h1 class="page-title">ทำแบบประเมิน SDQ (ฉบับครูประเมินนักเรียน)</h1>
                         <p class="page-subtitle">ขั้นตอนที่ 1: เลือกระดับชั้นเรียนที่ต้องการดำเนินการประเมิน (ปีการศึกษา ${escapeHTML(schoolYear)})</p>
+                    </div>
+                </div>
+                <div class="filter-bar" style="max-width:420px; margin-bottom:18px;">
+                    <div class="form-group">
+                        <label class="form-label" for="assessYearSelect">ปีการศึกษาที่ต้องการประเมิน</label>
+                        <select id="assessYearSelect" class="form-control">
+                            ${getAvailableSchoolYears().map(y => `<option value="${escapeHTML(y)}" ${y === schoolYear ? "selected" : ""}>ปีการศึกษา ${escapeHTML(y)}</option>`).join("")}
+                        </select>
                     </div>
                 </div>
                 <div class="grade-grid">
@@ -3708,6 +3786,12 @@
                     }).join("")}
                 </div>
             `;
+            document.getElementById("assessYearSelect").onchange = (e) => {
+                sess.schoolYear = e.target.value;
+                sess.selectedGrade = null;
+                sess.selectedRoom = null;
+                renderAssessView();
+            };
             document.querySelectorAll(".btn-choose-grade").forEach(btn => {
                 btn.onclick = () => {
                     sess.selectedGrade = btn.dataset.grade;
@@ -4222,6 +4306,7 @@
                 renderAssessView();
             };
             document.getElementById("btnBatchGoDashboard").onclick = () => {
+                state.dashboardFilter.schoolYear = sess.schoolYear || getDefaultAcademicYear();
                 state.dashboardFilter.grade = sess.selectedGrade;
                 state.dashboardFilter.room = sess.selectedRoom;
                 navigateTo("dashboard");
@@ -4230,7 +4315,7 @@
         }
 
         // ดึงข้อมูลนักเรียนที่กำลังประเมิน (โหมดรายบุคคล)
-        const student = state.students.find(s => s.studentId === sess.studentId);
+        const student = getStudentForYear(sess.studentId, schoolYear);
         if (!student) {
             sess.step = "select-grade";
             renderAssessView();
@@ -4612,7 +4697,8 @@
 
     async function persistAssessment(statusMode) {
         const sess = state.assessSession;
-        const student = state.students.find(s => s.studentId === sess.studentId);
+        const schoolYear = String(sess.schoolYear || getDefaultAcademicYear());
+        const student = getStudentForYear(sess.studentId, schoolYear);
         if (!student) return;
 
         if (statusMode === "completed" && sess.answers.some(a => a === null)) {
@@ -4622,7 +4708,6 @@
 
         setLoading(true);
         try {
-            const schoolYear = state.settings.schoolYear || CONFIG.SCHOOL_YEAR;
             const evalResult = evaluateSDQ(sess.answers);
             const nowISO = new Date().toISOString();
 
@@ -4696,10 +4781,9 @@
 
     async function persistBatchAssessments(statusMode) {
         const sess = state.assessSession;
-        const schoolYear = state.settings.schoolYear || CONFIG.SCHOOL_YEAR;
-        const targetStudents = state.students.filter(
-            s => (s.status || "active") === "active" &&
-                 s.grade === sess.selectedGrade &&
+        const schoolYear = String(sess.schoolYear || getDefaultAcademicYear());
+        const targetStudents = getStudentsForYear(schoolYear).filter(
+            s => s.grade === sess.selectedGrade &&
                  String(s.room) === String(sess.selectedRoom) &&
                  sess.batchData[s.studentId]?.included
         );
@@ -4800,7 +4884,7 @@
         const container = document.getElementById("view-print");
         const cfg = state.printConfig;
         const years = getAvailableSchoolYears();
-        const activeStudents = state.students.filter(s => (s.status || "active") === "active");
+        const activeStudents = getStudentsForYear(cfg.schoolYear);
 
         const roomsInGrade = Array.from(new Set(
             activeStudents.filter(s => s.grade === cfg.grade).map(s => String(s.room))
@@ -4912,7 +4996,6 @@
     function buildA4HeaderHTML(titleText, subtitleText) {
         const schoolName = state.settings.schoolName || CONFIG.SCHOOL_NAME;
         const logoUrl = state.settings.schoolLogoUrl || CONFIG.SCHOOL_LOGO_URL;
-        const printDate = formatThaiDate(getTodayISO());
 
         return `
             <div class="a4-header">
@@ -4923,7 +5006,6 @@
                     <div style="font-size:11pt; color:#333333;">${escapeHTML(subtitleText)}</div>
                 </div>
                 <div style="text-align:right; font-size:10.5pt; color:#444444;">
-                    <div>วันที่พิมพ์: ${printDate}</div>
                     <div>เกณฑ์ SDQ ฉบับครู (ภาษาไทย)</div>
                 </div>
             </div>
@@ -4933,7 +5015,7 @@
     function buildA4ReportHTML(cfg) {
         // แบบที่ 1: รายงานผลการประเมินรายบุคคล
         if (cfg.reportType === "individual") {
-            const student = state.students.find(s => s.studentId === cfg.studentId);
+            const student = getStudentForYear(cfg.studentId, cfg.schoolYear);
             if (!student) {
                 return `<div class="a4-sheet"><p>ไม่พบข้อมูลนักเรียนสำหรับจัดพิมพ์รายงาน</p></div>`;
             }
@@ -5060,8 +5142,8 @@
 
         // แบบที่ 2: รายงานสรุปผลรายห้องเรียน
         if (cfg.reportType === "classroom") {
-            const roomStudents = state.students
-                .filter(s => (s.status || "active") === "active" && s.grade === cfg.grade && String(s.room) === String(cfg.room))
+            const roomStudents = getStudentsForYear(cfg.schoolYear)
+                .filter(s => s.grade === cfg.grade && String(s.room) === String(cfg.room))
                 .sort((a, b) => Number(a.studentNo || 0) - Number(b.studentNo || 0));
 
             const latestMap = getLatestAssessmentsByStudent(cfg.schoolYear);
@@ -5192,15 +5274,16 @@
        ---------------------------------------------------------------------------- */
     function renderStudentsView() {
         const container = document.getElementById("view-students");
-        const { grade, room, showArchived } = state.studentMgmtFilter;
+        const { schoolYear, grade, room, showArchived } = state.studentMgmtFilter;
+        const yearStudents = state.students.filter(s => getStudentAcademicYear(s) === String(schoolYear));
 
         const rooms = Array.from(new Set(
-            state.students
+            yearStudents
                 .filter(s => grade === "ALL" || s.grade === grade)
                 .map(s => String(s.room))
         )).sort((a, b) => a.localeCompare(b, "th", { numeric: true }));
 
-        const filtered = state.students.filter(s => {
+        const filtered = yearStudents.filter(s => {
             const isArchived = (s.status || "active") === "archived";
             if (!showArchived && isArchived) return false;
             if (grade !== "ALL" && s.grade !== grade) return false;
@@ -5218,7 +5301,7 @@
             <div class="page-header">
                 <div>
                     <h1 class="page-title">จัดการรายชื่อนักเรียน</h1>
-                    <p class="page-subtitle">เพิ่ม แก้ไข ย้ายห้องเรียน นำเข้า CSV หรือจัดเก็บรายชื่อนักเรียน (Archive) โดยไม่ทำลายประวัติการประเมินเดิม</p>
+                    <p class="page-subtitle">ข้อมูลทะเบียนนักเรียนประจำปีการศึกษา ${escapeHTML(schoolYear)} · เพิ่ม แก้ไข ย้ายห้องเรียน นำเข้า CSV หรือจัดเก็บรายชื่อนักเรียนโดยไม่ทำลายประวัติการประเมินเดิม</p>
                 </div>
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
                     <button type="button" id="btnOpenCsvModal" class="btn btn-secondary">นำเข้าไฟล์ CSV</button>
@@ -5227,6 +5310,12 @@
             </div>
 
             <div class="filter-bar">
+                <div class="form-group">
+                    <label class="form-label" for="mgmtYear">ปีการศึกษา</label>
+                    <select id="mgmtYear" class="form-control">
+                        ${getAvailableSchoolYears().map(y => `<option value="${escapeHTML(y)}" ${y === String(schoolYear) ? "selected" : ""}>ปีการศึกษา ${escapeHTML(y)}</option>`).join("")}
+                    </select>
+                </div>
                 <div class="form-group">
                     <label class="form-label" for="mgmtGrade">ระดับชั้น</label>
                     <select id="mgmtGrade" class="form-control">
@@ -5262,13 +5351,14 @@
                                 <th>ระดับชั้น</th>
                                 <th class="text-center">ห้อง</th>
                                 <th class="text-center">เลขที่</th>
+                                <th class="text-center">ปีการศึกษา</th>
                                 <th class="text-center">สถานะ</th>
                                 <th class="text-right">จัดการ</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${filtered.length === 0 ? `
-                                <tr><td colspan="7" class="text-center" style="padding:24px; color:var(--text-muted);">ไม่พบรายชื่อนักเรียนในเงื่อนไขที่เลือก</td></tr>
+                                <tr><td colspan="8" class="text-center" style="padding:24px; color:var(--text-muted);">ไม่พบรายชื่อนักเรียนในปีการศึกษาและเงื่อนไขที่เลือก</td></tr>
                             ` : filtered.map(s => {
                                 const isArchived = (s.status || "active") === "archived";
                                 return `
@@ -5278,16 +5368,17 @@
                                         <td>${escapeHTML(s.grade)}</td>
                                         <td class="text-center">${escapeHTML(s.room)}</td>
                                         <td class="text-center">${escapeHTML(s.studentNo)}</td>
+                                        <td class="text-center">${escapeHTML(getStudentAcademicYear(s))}</td>
                                         <td class="text-center">
                                             ${isArchived
                                                 ? `<span class="badge badge-neutral">ไม่ใช้งาน</span>`
                                                 : `<span class="badge badge-normal">ใช้งาน</span>`}
                                         </td>
                                         <td class="text-right" style="white-space:nowrap;">
-                                            <button type="button" class="btn btn-secondary btn-sm btn-edit-student" data-id="${escapeHTML(s.studentId)}">แก้ไข</button>
+                                            <button type="button" class="btn btn-secondary btn-sm btn-edit-student" data-row="${escapeHTML(s._rowNumber)}">แก้ไข</button>
                                             ${isArchived
-                                                ? `<button type="button" class="btn btn-primary btn-sm btn-restore-student" data-id="${escapeHTML(s.studentId)}">กู้คืน</button>`
-                                                : `<button type="button" class="btn btn-danger btn-sm btn-archive-student" data-id="${escapeHTML(s.studentId)}">นำออก</button>`}
+                                                ? `<button type="button" class="btn btn-primary btn-sm btn-restore-student" data-row="${escapeHTML(s._rowNumber)}">กู้คืน</button>`
+                                                : `<button type="button" class="btn btn-danger btn-sm btn-archive-student" data-row="${escapeHTML(s._rowNumber)}">นำออก</button>`}
                                         </td>
                                     </tr>
                                 `;
@@ -5298,6 +5389,12 @@
             </div>
         `;
 
+        document.getElementById("mgmtYear").onchange = (e) => {
+            state.studentMgmtFilter.schoolYear = e.target.value;
+            state.studentMgmtFilter.grade = "ALL";
+            state.studentMgmtFilter.room = "ALL";
+            renderStudentsView();
+        };
         document.getElementById("mgmtGrade").onchange = (e) => {
             state.studentMgmtFilter.grade = e.target.value;
             state.studentMgmtFilter.room = "ALL";
@@ -5316,21 +5413,22 @@
 
         document.querySelectorAll(".btn-edit-student").forEach(btn => {
             btn.onclick = () => {
-                const st = state.students.find(x => x.studentId === btn.dataset.id);
+                const st = state.students.find(x => Number(x._rowNumber) === Number(btn.dataset.row));
                 if (st) openStudentFormModal(st);
             };
         });
         document.querySelectorAll(".btn-archive-student").forEach(btn => {
-            btn.onclick = () => confirmArchiveStudent(btn.dataset.id);
+            btn.onclick = () => confirmArchiveStudent(Number(btn.dataset.row));
         });
         document.querySelectorAll(".btn-restore-student").forEach(btn => {
-            btn.onclick = () => toggleStudentStatus(btn.dataset.id, "active");
+            btn.onclick = () => toggleStudentStatusByRow(Number(btn.dataset.row), "active");
         });
     }
 
     function openStudentFormModal(studentObj) {
         const isEdit = Boolean(studentObj);
-        const title = isEdit ? "แก้ไขข้อมูลนักเรียน" : "เพิ่มรายชื่อนักเรียนใหม่";
+        const title = isEdit ? "แก้ไขข้อมูลนักเรียนประจำปีการศึกษา" : "เพิ่มรายชื่อนักเรียนใหม่";
+        const studentYear = String(studentObj?.schoolYear || state.studentMgmtFilter.schoolYear || getDefaultAcademicYear());
 
         const bodyHtml = `
             <form id="studentModalForm">
@@ -5354,10 +5452,19 @@
                         <input type="text" id="fRoom" class="form-control" placeholder="เช่น 1" required value="${escapeHTML(studentObj?.room || "1")}">
                     </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label" for="fStudentNo">เลขที่ *</label>
-                    <input type="number" id="fStudentNo" class="form-control" min="1" required value="${escapeHTML(studentObj?.studentNo || "")}">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:14px;">
+                    <div class="form-group">
+                        <label class="form-label" for="fStudentNo">เลขที่ *</label>
+                        <input type="number" id="fStudentNo" class="form-control" min="1" required value="${escapeHTML(studentObj?.studentNo || "")}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="fStudentYear">ปีการศึกษา *</label>
+                        <select id="fStudentYear" class="form-control" required>
+                            ${getAvailableSchoolYears().map(y => `<option value="${escapeHTML(y)}" ${y === studentYear ? "selected" : ""}>${escapeHTML(y)}</option>`).join("")}
+                        </select>
+                    </div>
                 </div>
+                <p style="font-size:0.82rem; color:var(--text-muted); margin-top:4px;">หากเป็นนักเรียนคนเดิมในปีการศึกษาใหม่ ให้เพิ่มข้อมูลปีใหม่โดยใช้รหัสนักเรียนเดิม ระบบจะเชื่อมประวัติการประเมินด้วยรหัสนักเรียนภายในเดียวกัน</p>
             </form>
         `;
 
@@ -5374,17 +5481,29 @@
             const grade = document.getElementById("fGrade").value;
             const room = document.getElementById("fRoom").value.trim();
             const studentNo = document.getElementById("fStudentNo").value.trim();
+            const schoolYear = document.getElementById("fStudentYear").value;
 
-            if (!studentCode || !fullName || !grade || !room || !studentNo) {
+            if (!studentCode || !fullName || !grade || !room || !studentNo || !isSupportedAcademicYear(schoolYear)) {
                 showToast("กรุณากรอกข้อมูลที่มีเครื่องหมาย * ให้ครบถ้วน", "warning");
+                return;
+            }
+
+            const duplicateInYear = state.students.find(s =>
+                String(s.studentCode) === String(studentCode) &&
+                getStudentAcademicYear(s) === String(schoolYear) &&
+                (!isEdit || Number(s._rowNumber) !== Number(studentObj._rowNumber))
+            );
+            if (duplicateInYear) {
+                showToast("พบรหัสนักเรียนนี้ในปีการศึกษาที่เลือกแล้ว กรุณาแก้ไขรายการเดิมแทนการเพิ่มซ้ำ", "warning");
                 return;
             }
 
             setLoading(true);
             try {
                 const now = new Date().toISOString();
+                const existingIdentity = state.students.find(s => String(s.studentCode) === String(studentCode));
                 const record = {
-                    studentId: isEdit ? studentObj.studentId : generateUUID(),
+                    studentId: isEdit ? studentObj.studentId : (existingIdentity?.studentId || generateUUID()),
                     studentCode,
                     fullName,
                     grade,
@@ -5392,7 +5511,8 @@
                     studentNo,
                     status: isEdit ? (studentObj.status || "active") : "active",
                     createdAt: isEdit ? studentObj.createdAt : now,
-                    updatedAt: now
+                    updatedAt: now,
+                    schoolYear
                 };
 
                 const rowVals = SHEET_SCHEMAS.Students.map(k => record[k] ?? "");
@@ -5401,6 +5521,7 @@
                 } else {
                     await appendRowToSheet("Students", rowVals);
                 }
+                state.studentMgmtFilter.schoolYear = schoolYear;
 
                 await syncAllDataFromSheets();
                 closeModal();
@@ -5414,8 +5535,8 @@
         };
     }
 
-    function confirmArchiveStudent(studentId) {
-        const student = state.students.find(s => s.studentId === studentId);
+    function confirmArchiveStudent(rowNumber) {
+        const student = state.students.find(s => Number(s._rowNumber) === Number(rowNumber));
         if (!student) return;
 
         openModal(
@@ -5426,13 +5547,13 @@
              </p>`,
             `
                 <button type="button" class="btn btn-secondary" onclick="closeModal()">ยกเลิก</button>
-                <button type="button" class="btn btn-danger" onclick="closeModal(); toggleStudentStatus('${escapeHTML(studentId)}', 'archived');">ยืนยันการนำรายชื่อออก</button>
+                <button type="button" class="btn btn-danger" onclick="closeModal(); toggleStudentStatusByRow(${Number(rowNumber)}, 'archived');">ยืนยันการนำรายชื่อออก</button>
             `
         );
     }
 
-    async function toggleStudentStatus(studentId, newStatus) {
-        const student = state.students.find(s => s.studentId === studentId);
+    async function toggleStudentStatusByRow(rowNumber, newStatus) {
+        const student = state.students.find(s => Number(s._rowNumber) === Number(rowNumber));
         if (!student || !student._rowNumber) return;
 
         setLoading(true);
@@ -5454,11 +5575,12 @@
         const bodyHtml = `
             <p style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:12px;">
                 อัปโหลดไฟล์ CSV (UTF-8) ที่มีคอลัมน์เรียงตามลำดับดังนี้:<br>
-                <code>รหัสนักเรียน,ชื่อ-นามสกุล,ระดับชั้น,ห้อง,เลขที่</code>
+                <code>รหัสนักเรียน,ชื่อ-นามสกุล,ระดับชั้น,ห้อง,เลขที่,ปีการศึกษา</code><br>
+                คอลัมน์ปีการศึกษาจะใส่หรือไม่ก็ได้ หากไม่ใส่ ระบบจะใช้ปีที่เลือกอยู่ในหน้าจัดการนักเรียน
             </p>
             <div style="background:var(--bg-subtle); padding:10px; border:1px solid var(--border-color); font-size:0.82rem; margin-bottom:14px;">
                 ตัวอย่าง:<br>
-                69001,เด็กชายมานะ ใจดี,ประถมศึกษาปีที่ 1,1,1
+                69001,เด็กชายมานะ ใจดี,ประถมศึกษาปีที่ 1,1,1,2569
             </div>
             <input type="file" id="csvFileInput" accept=".csv" class="form-control" style="padding-top:6px;">
         `;
@@ -5486,8 +5608,15 @@
                 if (idx === 0 && (cols[0].includes("รหัส") || cols[0].toLowerCase().includes("code"))) return;
                 if (cols.length < 5) return;
 
+                const schoolYear = String(cols[5] || state.studentMgmtFilter.schoolYear || getDefaultAcademicYear());
+                if (!isSupportedAcademicYear(schoolYear)) return;
+                const duplicate = state.students.some(s =>
+                    String(s.studentCode) === String(cols[0]) && getStudentAcademicYear(s) === schoolYear
+                );
+                if (duplicate) return;
+                const existingIdentity = state.students.find(s => String(s.studentCode) === String(cols[0]));
                 const rec = [
-                    generateUUID(),
+                    existingIdentity?.studentId || generateUUID(),
                     cols[0],
                     cols[1],
                     cols[2],
@@ -5495,7 +5624,8 @@
                     cols[4],
                     "active",
                     now,
-                    now
+                    now,
+                    schoolYear
                 ];
                 rowsToAppend.push(rec);
             });
@@ -5541,6 +5671,7 @@
         const container = document.getElementById("view-settings");
         const schoolName = state.settings.schoolName || CONFIG.SCHOOL_NAME;
         const schoolYear = state.settings.schoolYear || CONFIG.SCHOOL_YEAR;
+        const dashboardHomeYear = state.settings.dashboardHomeYear || schoolYear;
         const logoUrl = state.settings.schoolLogoUrl || CONFIG.SCHOOL_LOGO_URL;
         const criteriaVersion = state.settings.sdqCriteriaVersion || SDQ_METADATA.versionName;
 
@@ -5562,15 +5693,29 @@
                         <input type="text" id="setSchoolName" class="form-control" value="${escapeHTML(schoolName)}">
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="setSchoolYear">ปีการศึกษาปัจจุบัน</label>
-                        <input type="text" id="setSchoolYear" class="form-control" value="${escapeHTML(schoolYear)}">
+                        <label class="form-label" for="setSchoolYear">ปีการศึกษาปัจจุบันสำหรับเพิ่มข้อมูลและเริ่มประเมิน</label>
+                        <select id="setSchoolYear" class="form-control">
+                            ${getAvailableSchoolYears().map(y => `<option value="${escapeHTML(y)}" ${y === String(schoolYear) ? "selected" : ""}>ปีการศึกษา ${escapeHTML(y)}</option>`).join("")}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="setDashboardHomeYear">ปีการศึกษาที่แสดงเป็นค่าเริ่มต้นใน Dashboard หน้าแรก</label>
+                        <select id="setDashboardHomeYear" class="form-control">
+                            ${getAvailableSchoolYears().map(y => `<option value="${escapeHTML(y)}" ${y === String(dashboardHomeYear) ? "selected" : ""}>ปีการศึกษา ${escapeHTML(y)}</option>`).join("")}
+                        </select>
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="setLogoUrl">URL โลโก้โรงเรียน</label>
                         <input type="url" id="setLogoUrl" class="form-control" placeholder="https://..." value="${escapeHTML(logoUrl)}">
                     </div>
                 </div>
+                <p style="font-size:0.84rem; color:var(--text-secondary); margin:-4px 0 16px;">ปีการศึกษาปัจจุบันใช้เป็นค่าเริ่มต้นสำหรับการเพิ่มรายชื่อนักเรียนและเริ่มทำแบบประเมิน ส่วนปี Dashboard จะกำหนดว่าทุกครั้งที่เปิดหน้าแรก ระบบจะแสดงข้อมูลของปีใด โดยยังสามารถเปลี่ยนปีชั่วคราวในหน้า Dashboard ได้</p>
                 <button type="button" id="btnSaveGeneralSettings" class="btn btn-primary">บันทึกการตั้งค่าระบบ</button>
+            </div>
+
+            <div class="config-warning-box" style="margin-bottom:22px;">
+                <strong>การเตรียมฐานข้อมูล Google Sheets สำหรับเก็บข้อมูลหลายปี</strong>
+                ในชีต <b>Students</b> ให้เพิ่มหัวคอลัมน์ใหม่ที่ช่อง <b>J1</b> ชื่อ <code>schoolYear</code> โดยคงลำดับคอลัมน์ A–I เดิมไว้ และกำหนดปีการศึกษาให้กับรายชื่อนักเรียนเดิมก่อนเริ่มใช้งานหลายปี เมื่อขึ้นปีการศึกษาใหม่ ให้เพิ่มแถวข้อมูลนักเรียนประจำปีใหม่โดยใช้รหัสนักเรียนเดิม เพื่อเชื่อมประวัติการประเมินย้อนหลัง
             </div>
 
             <div class="panel">
@@ -5642,8 +5787,14 @@
 
         document.getElementById("btnSaveGeneralSettings").onclick = async () => {
             const newName = document.getElementById("setSchoolName").value.trim() || CONFIG.SCHOOL_NAME;
-            const newYear = document.getElementById("setSchoolYear").value.trim() || CONFIG.SCHOOL_YEAR;
+            const newYear = document.getElementById("setSchoolYear").value;
+            const newDashboardHomeYear = document.getElementById("setDashboardHomeYear").value;
             const newLogo = document.getElementById("setLogoUrl").value.trim();
+
+            if (!isSupportedAcademicYear(newYear) || !isSupportedAcademicYear(newDashboardHomeYear)) {
+                showToast("กรุณาเลือกปีการศึกษาระหว่าง พ.ศ. 2568–2580", "warning");
+                return;
+            }
 
             setLoading(true);
             try {
@@ -5653,6 +5804,7 @@
                     schoolName: newName,
                     schoolLogoUrl: newLogo,
                     schoolYear: newYear,
+                    dashboardHomeYear: newDashboardHomeYear,
                     sdqCriteriaVersion: criteriaVersion,
                     systemStartDate: state.settings.systemStartDate || getTodayISO(),
                     sdqCriteriaJson: JSON.stringify(SDQ_CRITERIA),
@@ -5666,6 +5818,7 @@
                         ["schoolName", newName, now],
                         ["schoolLogoUrl", newLogo, now],
                         ["schoolYear", newYear, now],
+                        ["dashboardHomeYear", newDashboardHomeYear, now],
                         ["sdqCriteriaVersion", criteriaVersion, now],
                         ["systemStartDate", state.settings.systemStartDate, now],
                         ["sdqCriteriaJson", JSON.stringify(SDQ_CRITERIA), now]
@@ -5677,6 +5830,11 @@
                 }
 
                 await syncAllDataFromSheets();
+                state.dashboardFilter.schoolYear = newDashboardHomeYear;
+                state.printConfig.schoolYear = newYear;
+                state.studentMgmtFilter.schoolYear = newYear;
+                state.assessSession.schoolYear = newYear;
+                applyBranding();
                 renderSettingsView();
                 showToast("บันทึกการตั้งค่าระบบเรียบร้อยแล้ว", "success");
             } catch (err) {
